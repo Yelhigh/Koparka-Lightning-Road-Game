@@ -475,6 +475,14 @@
 }
 .play-button:hover { transform: translateY(-2px); box-shadow: 0 7px 0 #193b4a; }
 .play-button:active { transform: translateY(3px); box-shadow: 0 2px 0 #193b4a; }
+.sound-toggle {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: 2px solid #193b4a; border-radius: 999px; background: #e0f1e7;
+  color: #193b4a; padding: 9px 11px; font-size: 12px; font-weight: 800;
+  box-shadow: 0 3px 0 #193b4a; transition: transform .15s, background .15s;
+}
+.sound-toggle:hover { transform: translateY(-1px); background: #d0e9da; }
+.sound-toggle[aria-pressed='false'] { background: #fff3cf; }
 .touch-control {
   display: grid; place-items: center; width: 64px; height: 58px;
   border: 2px solid #193b4a; border-radius: 18px; background: #ffe36c;
@@ -486,6 +494,8 @@
   .game-stage { aspect-ratio: 1 / 1; }
   .game-overlay { padding-top: 3%; }
   .overlay-card { padding: 12px; }
+  .sound-toggle { width: 44px; height: 44px; padding: 0; }
+  .sound-toggle span { display: none; }
   .game-stage { border-width: 3px; border-radius: 18px; box-shadow: 0 6px 0 #183c4b, 0 12px 25px rgba(38, 80, 82, .15); }
   .koparka-window { width: 51%; height: 35%; }
   .bolt { width: 6.2%; }

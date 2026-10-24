@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, RotateCcw, Sparkles } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  RotateCcw,
+  Sparkles,
+  Volume2,
+  VolumeX,
+} from 'lucide-react';
 import {
   createGameState,
   startGame,
@@ -7,8 +14,16 @@ import {
   type GameInput,
   type GameState,
 } from './gameEngine';
+import SceneExtras from './SceneExtras';
+import { GameAudio } from './gameAudio';
 
 const INITIAL_GAME = createGameState();
+const DOG_LINES = {
+  black: 'Mlamlam',
+  white: 'Jestem Botek!',
+} as const;
+
+type DogId = keyof typeof DOG_LINES;
 
 function LightningMark() {
   return (
@@ -22,6 +37,20 @@ export default function KoparkaGame() {
   const [game, setGame] = useState<GameState>(INITIAL_GAME);
   const gameRef = useRef<GameState>(INITIAL_GAME);
   const inputRef = useRef<GameInput>({ left: false, right: false });
+  const gameAudioRef = useRef<GameAudio | null>(null);
+  const soundEnabledRef = useRef(true);
+  const greetingTimerRef = useRef<number | null>(null);
+  const [round, setRound] = useState(0);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [henioGreetingVisible, setHenioGreetingVisible] = useState(false);
+  const [activeBark, setActiveBark] = useState<{
+    dog: DogId;
+    text: string;
+  } | null>(null);
+
+  if (gameAudioRef.current === null) {
+    gameAudioRef.current = new GameAudio();
+  }
 
   const updateGame = useCallback((next: GameState) => {
     gameRef.current = next;
@@ -31,6 +60,23 @@ export default function KoparkaGame() {
   const begin = useCallback(() => {
     inputRef.current = { left: false, right: false };
     updateGame(startGame());
+    setRound((current) => current + 1);
+    setActiveBark(null);
+    setHenioGreetingVisible(true);
+    if (greetingTimerRef.current !== null) {
+      window.clearTimeout(greetingTimerRef.current);
+    }
+    greetingTimerRef.current = window.setTimeout(
+      () => setHenioGreetingVisible(false),
+      3200,
+    );
+
+    const audio = gameAudioRef.current;
+    audio?.stopSpeech();
+    if (soundEnabledRef.current) {
+      void audio?.start();
+      audio?.speakPolish('Hej!! Jestem Henio!', 1.32, 0.94);
+    }
   }, [updateGame]);
 
   useEffect(() => {
@@ -41,13 +87,64 @@ export default function KoparkaGame() {
       const delta = (time - previous) / 1000;
       previous = time;
       if (gameRef.current.status === 'playing') {
-        updateGame(stepGame(gameRef.current, delta, inputRef.current));
+        const current = gameRef.current;
+        const next = stepGame(current, delta, inputRef.current);
+        const moving = next.playerX !== current.playerX;
+        const direction: -1 | 1 = inputRef.current.right ? 1 : -1;
+        gameAudioRef.current?.setMotion(moving, direction);
+        updateGame(next);
       }
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
   }, [updateGame]);
+
+  useEffect(() => {
+    if (game.status !== 'playing') {
+      setActiveBark(null);
+      return;
+    }
+
+    let barkTimer = 0;
+    let bubbleTimer = 0;
+    let cancelled = false;
+
+    const scheduleNextBark = () => {
+      barkTimer = window.setTimeout(() => {
+        if (cancelled) return;
+        const dog: DogId = Math.random() < 0.5 ? 'black' : 'white';
+        const text = DOG_LINES[dog];
+        setActiveBark({ dog, text });
+        if (soundEnabledRef.current) {
+          gameAudioRef.current?.speakPolish(
+            text,
+            dog === 'black' ? 1.42 : 1.2,
+            0.94,
+          );
+        }
+        bubbleTimer = window.setTimeout(() => setActiveBark(null), 2600);
+        scheduleNextBark();
+      }, 3800 + Math.random() * 5400);
+    };
+
+    scheduleNextBark();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(barkTimer);
+      window.clearTimeout(bubbleTimer);
+    };
+  }, [game.status, round]);
+
+  useEffect(
+    () => () => {
+      if (greetingTimerRef.current !== null) {
+        window.clearTimeout(greetingTimerRef.current);
+      }
+      gameAudioRef.current?.dispose();
+    },
+    [],
+  );
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -76,6 +173,18 @@ export default function KoparkaGame() {
     inputRef.current[direction] = active;
   };
 
+  const toggleSound = () => {
+    const next = !soundEnabledRef.current;
+    soundEnabledRef.current = next;
+    setSoundEnabled(next);
+    gameAudioRef.current?.setEnabled(next);
+    if (next) {
+      void gameAudioRef.current?.start();
+    } else {
+      gameAudioRef.current?.stopSpeech();
+    }
+  };
+
   return (
     <main className="game-shell min-h-[100dvh] px-4 py-5 sm:px-7 sm:py-8">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 sm:gap-5">
@@ -98,6 +207,11 @@ export default function KoparkaGame() {
             <div className="cloud-doodle" />
             <div className="stage-hill hill-one" />
             <div className="stage-hill hill-two" />
+            <SceneExtras
+              playerX={game.playerX}
+              henioGreetingVisible={henioGreetingVisible}
+              activeBark={activeBark}
+            />
             {game.bolts.map((bolt) => (
               <div
                 key={bolt.id}
@@ -162,6 +276,17 @@ export default function KoparkaGame() {
           </div>
           <div className="flex items-center gap-2">
             <p className="hidden text-sm font-bold text-[#477371] sm:block">Arrow keys or A / D</p>
+            <button
+              className="sound-toggle"
+              onClick={toggleSound}
+              aria-label={soundEnabled ? 'Mute game sounds' : 'Turn game sounds on'}
+              aria-pressed={soundEnabled}
+              title={soundEnabled ? 'Mute game sounds' : 'Turn game sounds on'}
+              data-testid="button-sound-toggle"
+            >
+              {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
+              <span>{soundEnabled ? 'Sound on' : 'Sound off'}</span>
+            </button>
             <button
               className="flex items-center gap-2 rounded-full border-2 border-[#193b4a] bg-[#d6f0e7] px-4 py-2.5 text-sm font-extrabold text-[#193b4a] shadow-[0_3px_0_#193b4a] transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
               onClick={begin}
