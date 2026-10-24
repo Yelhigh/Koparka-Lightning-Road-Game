@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Koparka Lightning Run"
+description = "A small browser game based on the user's hand-drawn koparka. Drive left and right along a road and collect lightning bolts."
+version = "1.0.0"
+id = "artifacts/koparka-game"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23225
+
+[services.development]
+run = "pnpm --filter @workspace/koparka-game run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/koparka-game", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/koparka-game/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23225"
+BASE_PATH = "/"
